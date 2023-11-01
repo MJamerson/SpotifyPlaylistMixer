@@ -52,9 +52,23 @@ def buildLists(sp, user):
     return t_pl_list_id, t_pl_list_name
 
 def getUser(sp):
-    username = input("Enter username")
-    user = sp.user(username)
-    return user
+    if config['USER2']['id'] != "":
+        return config['USER2']['id']
+    else:
+        username = input("Enter username")
+        user = sp.user(username)
+        store_user = input("Save user to settings? (Y/N):")
+        if store_user.upper() == "Y":
+            saveUser(user, username)
+        return user['id']
+
+def saveUser(user, username):
+    config['USER2']['user'] = username
+    config['USER2']['name'] = user['name']
+    config['USER2']['id'] = user['id']
+
+    with open("Settings.ini", w) as configfile:
+        config.write(configfile)
 
 def loadTracks(sp, pl_one, pl_tracks, pl_track_IDs):
     pl_result = sp.playlist_items(pl_one, fields='items.track, next', additional_types=['track'])
@@ -80,7 +94,7 @@ pl_list_id, pl_list_name = buildLists(sp, sp.me()['id'])
 pl_one = getPlaylistIDList(1, sp.me()['display_name'], pl_list_id, pl_list_name)
 
 user = getUser(sp)
-pl_list_id2, pl_list_name2 = buildLists(sp, user['id'])
+pl_list_id2, pl_list_name2 = buildLists(sp, user)
 pl_two = getPlaylistIDList(2, user['display_name'], pl_list_id2, pl_list_name2)
 
 pl_tracks = []

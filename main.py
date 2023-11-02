@@ -28,7 +28,7 @@ def getPlaylistIDList(entry, user, pl_list_id, pl_list_name):
     while(True):
         try:
             pl_name = input(f"Input desired playlist for {user}:")
-            pl_id =  getPlaylistID(pl_name, pl_list_name, pl_list_id)
+            pl_id = getPlaylistID(pl_name, pl_list_name, pl_list_id)
             if(pl_id != 0):
                 return pl_id
             else:
@@ -62,10 +62,10 @@ def getUser(sp):
             saveUser(user, username)
         return user['id']
 
-def saveUser(user, username):
-    config['USER2']['user'] = username
-    config['USER2']['name'] = user['name']
-    config['USER2']['id'] = user['id']
+def saveUser(id_num, user, name, id):
+    config[id_num]['user'] = user
+    config[id_num]['name'] = name
+    config[id_num]['id'] = id
 
     with open("Settings.ini", w) as configfile:
         config.write(configfile)
@@ -88,10 +88,69 @@ def createPlaylist(sp, user):
 def chunker(seq, size): #https://stackoverflow.com/questions/434287/how-to-iterate-over-a-list-in-chunks
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
+def loadUserInfo(sp, id_num):
+    id_num = f"USER{entry}"
+    try:
+        u_user = config[id_num]['user']
+        u_name = config[id_num]['name']
+        u_id = config[id_num]['id']
+    except:
+        return None, None, None
 
+    promptSave = False
+    while u_user == "":
+        try:
+            u_user = input("Enter username")
+            t_acc = sp.user(u_user)
+            promptSave = True
+        except:
+            print("Error loading user information! Please double check the username provided!")
 
+    if u_name == "":
+        try:
+            u_name = t_acc['name']
+            promptSave = True
+        except:
+            print("Error accessing name of user object!")
+            u_name = None
+
+    if u_id == "":
+        try:
+            u_id = t_acc['id']
+            promptSave = True
+        except:
+            print("Error accessing id of user object!")
+            u_id = None
+
+    if promptSave:
+        save_user = input("Save user to settings? (Y/N):")
+        if save_user.upper() == "Y":
+            saveUser(id_num, u_user, u_name, u_id)
+
+    return u_user, u_name, u_id
+
+def loadPlaylistInfo(sp, in_num):
+    id_num = f"USER{entry}"
+    try:
+        u_pl_name = config[id_num]['pl_name']
+        u_pl_id = config[id_num]['pl_id']
+    except:
+
+    while u_pl_name == "":
+        try:
+            u_pl_name = input(f"Enter playlist name of {u_name}: ")
+            t_pl = sp.user(u_user)
+        except:
+            print("Error loading user information! Please double check the username provided!")
+
+    store_user = input("Save user to settings? (Y/N):")
+        if store_user.upper() == "Y":
+            saveUser(user, username)
+
+loadUserInfo(sp, 1)
 pl_list_id, pl_list_name = buildLists(sp, sp.me()['id'])
 pl_one = getPlaylistIDList(1, sp.me()['display_name'], pl_list_id, pl_list_name)
+
 
 user = getUser(sp)
 pl_list_id2, pl_list_name2 = buildLists(sp, user)

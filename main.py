@@ -20,19 +20,19 @@ sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=config['CREDENTIALS']['
                                                redirect_uri=config['CREDENTIALS']['CLIENT_REDIRECT'],
                                                scope="playlist-read-private, playlist-modify-private"))
 
-def getPlaylistIDList(entry, user, pl_list_id, pl_list_name):
-    id_num = f"id{entry}"
-    if (config['PLAYLIST'][id_num] != ""):
-        if(config['PLAYLIST'][id_num] in pl_list_id):
-            return config['PLAYLIST'][id_num]
+def getPlaylistIDList(entry, u_name, pl_list_id, pl_list_name):
+    user_section = f"USER{entry}"
+    if config[user_section]['pl_id'] in pl_list_id:
+        return config[user_section]['pl_id']
+
     while(True):
         try:
-            pl_name = input(f"Input desired playlist for {user}:")
+            pl_name = input(f"Input desired playlist for {u_name}:")
             pl_id = getPlaylistID(pl_name, pl_list_name, pl_list_id)
             if(pl_id != 0):
                 return pl_id
             else:
-                print(f"\'{pl_name}\" is not a valid playlist for {user}!")
+                print(f"\'{pl_name}\" is not a valid playlist for {u_name}!")
         except:
             print("Invalid playlist name input!")
 
@@ -42,11 +42,11 @@ def getPlaylistID(pl_name, pl_list_name, pl_list_id):
     else:
         return 0
 
-def buildLists(sp, user):
+def buildLists(sp, u_id):
     # Build lists of playlist ids and names
     t_pl_list_id = []
     t_pl_list_name = []
-    for cur_pl in sp.user_playlists(user)['items']:
+    for cur_pl in sp.user_playlists(u_id)['items']:
         t_pl_list_id.append(cur_pl['id'])
         t_pl_list_name.append(cur_pl['name'])
     return t_pl_list_id, t_pl_list_name
@@ -62,12 +62,8 @@ def getUser(sp):
             saveUser(user, username)
         return user['id']
 
-def saveUser(id_num, user, name, id):
-    config[id_num]['user'] = user
-    config[id_num]['name'] = name
-    config[id_num]['id'] = id
-
-    with open("Settings.ini", w) as configfile:
+def saveConfig():
+    with open("Settings.ini", "w") as configfile:
         config.write(configfile)
 
 def loadTracks(sp, pl_one, pl_tracks, pl_track_IDs):
@@ -89,7 +85,7 @@ def chunker(seq, size): #https://stackoverflow.com/questions/434287/how-to-itera
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
 def loadUserInfo(sp, id_num):
-    id_num = f"USER{entry}"
+    id_num = f"USER{id_num}"
     try:
         u_user = config[id_num]['user']
         u_name = config[id_num]['name']
@@ -129,28 +125,45 @@ def loadUserInfo(sp, id_num):
 
     return u_user, u_name, u_id
 
-def loadPlaylistInfo(sp, in_num):
-    id_num = f"USER{entry}"
+def loadPlaylistInfo(sp, id_num, u_name):
+    id_num = f"USER{id_num}"
     try:
         u_pl_name = config[id_num]['pl_name']
         u_pl_id = config[id_num]['pl_id']
     except:
-
+        print("TODO Error handle")
     while u_pl_name == "":
         try:
             u_pl_name = input(f"Enter playlist name of {u_name}: ")
-            t_pl = sp.user(u_user)
         except:
-            print("Error loading user information! Please double check the username provided!")
+            print("Error loading playlist information! Please double check the username provided!")
 
     store_user = input("Save user to settings? (Y/N):")
         if store_user.upper() == "Y":
             saveUser(user, username)
 
-loadUserInfo(sp, 1)
-pl_list_id, pl_list_name = buildLists(sp, sp.me()['id'])
-pl_one = getPlaylistIDList(1, sp.me()['display_name'], pl_list_id, pl_list_name)
+def loadAuthUserInfo(sp):
+    user_section = "USER1"
+    try:
+        if config[user_section]['name'] == "" or config[user_section]['id'] == "":
+            t_acc = sp.me()
+            config[user_section]['name'] = t_acc['display_name']
+            config[user_section]['id'] = t_acc['id']
+            saveConfig()
+    except:
+        print("Unable to load/save default user!")
+        sys.exit(1) # TODO: Menu Interface: Remove and return
 
+    return config[user_section]['name'], config[user_section]['id']
+
+
+
+
+
+u1_name, u1_id = loadAuthUserInfo(sp)
+pl_list_id, pl_list_name = buildLists(sp, u1_id)
+pl_one = getPlaylistIDList(1, u1_name, pl_list_id, pl_list_name)
+# TODO: Auth user is not saving playlist information!
 
 user = getUser(sp)
 pl_list_id2, pl_list_name2 = buildLists(sp, user)

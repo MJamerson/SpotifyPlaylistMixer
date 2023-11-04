@@ -11,25 +11,30 @@
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import configparser
+import logging
+import sys
 
 config = configparser.ConfigParser()
 config.read("Settings.ini")
+logging.basicConfig(level=logging.WARNING)
 
 sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=config['CREDENTIALS']['CLIENT_ID'],
                                                client_secret=config['CREDENTIALS']['CLIENT_SECRET'],
                                                redirect_uri=config['CREDENTIALS']['CLIENT_REDIRECT'],
                                                scope="playlist-read-private, playlist-modify-private"))
 
-def getPlaylistIDList(entry, u_name, pl_list_id, pl_list_name):
+def getEntryPlaylist(entry, u_name, pl_list_id, pl_list_name):
     user_section = f"USER{entry}"
     if config[user_section]['pl_id'] in pl_list_id:
         return config[user_section]['pl_id']
 
-    while(True):
+    while True:
         try:
             pl_name = input(f"Input desired playlist for {u_name}:")
             pl_id = getPlaylistID(pl_name, pl_list_name, pl_list_id)
-            if(pl_id != 0):
+            if pl_id != 0:
+                config[user_section]['pl_name'] = pl_name
+                config[user_section]['pl_id'] = pl_id
                 return pl_id
             else:
                 print(f"\'{pl_name}\" is not a valid playlist for {u_name}!")
@@ -50,17 +55,6 @@ def buildLists(sp, u_id):
         t_pl_list_id.append(cur_pl['id'])
         t_pl_list_name.append(cur_pl['name'])
     return t_pl_list_id, t_pl_list_name
-
-def getUser(sp):
-    if config['USER2']['id'] != "":
-        return config['USER2']['id']
-    else:
-        username = input("Enter username")
-        user = sp.user(username)
-        store_user = input("Save user to settings? (Y/N):")
-        if store_user.upper() == "Y":
-            saveUser(user, username)
-        return user['id']
 
 def saveConfig():
     with open("Settings.ini", "w") as configfile:
@@ -86,61 +80,39 @@ def chunker(seq, size): #https://stackoverflow.com/questions/434287/how-to-itera
 
 def loadUserInfo(sp, id_num):
     id_num = f"USER{id_num}"
+
+    u_user = config[id_num]['user']
+    u_name = config[id_num]['name']
+    u_id = config[id_num]['id']
+
     try:
-        u_user = config[id_num]['user']
-        u_name = config[id_num]['name']
-        u_id = config[id_num]['id']
+        t_acc = sp.user(u_user)
+        if t_acc['display_name'] == u_name and t_acc['id'] == u_id:
+            return t_acc['display_name'], t_acc['id']
+        else:
+            raise Exception
     except:
-        return None, None, None
+        while True: # Loop until a valid user, name, and id have been collected
+            try:
+                u_user = input("Enter username: ")
+                t_acc = sp.user(u_user)
+            except:
+                print("Error loading user information! Please double check the username provided!")
+                continue
 
-    promptSave = False
-    while u_user == "":
-        try:
-            u_user = input("Enter username")
-            t_acc = sp.user(u_user)
-            promptSave = True
-        except:
-            print("Error loading user information! Please double check the username provided!")
+            if u_name == "" or u_id == "":
+                try:
+                    u_name = t_acc['display_name']
+                    u_id = t_acc['id']
+                    break
+                except:
+                    print("Error accessing name or id of user object!")
 
-    if u_name == "":
-        try:
-            u_name = t_acc['name']
-            promptSave = True
-        except:
-            print("Error accessing name of user object!")
-            u_name = None
-
-    if u_id == "":
-        try:
-            u_id = t_acc['id']
-            promptSave = True
-        except:
-            print("Error accessing id of user object!")
-            u_id = None
-
-    if promptSave:
-        save_user = input("Save user to settings? (Y/N):")
-        if save_user.upper() == "Y":
-            saveUser(id_num, u_user, u_name, u_id)
-
-    return u_user, u_name, u_id
-
-def loadPlaylistInfo(sp, id_num, u_name):
-    id_num = f"USER{id_num}"
-    try:
-        u_pl_name = config[id_num]['pl_name']
-        u_pl_id = config[id_num]['pl_id']
-    except:
-        print("TODO Error handle")
-    while u_pl_name == "":
-        try:
-            u_pl_name = input(f"Enter playlist name of {u_name}: ")
-        except:
-            print("Error loading playlist information! Please double check the username provided!")
-
-    store_user = input("Save user to settings? (Y/N):")
-        if store_user.upper() == "Y":
-            saveUser(user, username)
+        # Store user values to config memory for saving later
+    config[id_num]['user'] = u_user
+    config[id_num]['name'] = u_name
+    config[id_num]['id'] = u_id
+    return u_name, u_id
 
 def loadAuthUserInfo(sp):
     user_section = "USER1"
@@ -149,57 +121,57 @@ def loadAuthUserInfo(sp):
             t_acc = sp.me()
             config[user_section]['name'] = t_acc['display_name']
             config[user_section]['id'] = t_acc['id']
-            saveConfig()
     except:
         print("Unable to load/save default user!")
         sys.exit(1) # TODO: Menu Interface: Remove and return
 
     return config[user_section]['name'], config[user_section]['id']
 
+def getNewPlaylistFlag():
+    while True:
+        pl_flag = input("Create new playlist? (Y/N): ")
+        if pl_flag.upper() == "Y" or pl_flag.upper() == "N":
+            return pl_flag
+        else:
+            print("Please enter valid choice.")
 
 
 
-
+# Load OAuth user information and save to file
 u1_name, u1_id = loadAuthUserInfo(sp)
 pl_list_id, pl_list_name = buildLists(sp, u1_id)
-pl_one = getPlaylistIDList(1, u1_name, pl_list_id, pl_list_name)
-# TODO: Auth user is not saving playlist information!
+pl_one = getEntryPlaylist(1, u1_name, pl_list_id, pl_list_name)
+saveConfig()
 
-user = getUser(sp)
-pl_list_id2, pl_list_name2 = buildLists(sp, user)
-pl_two = getPlaylistIDList(2, user['display_name'], pl_list_id2, pl_list_name2)
+# Load selected additional user information and save to file
+u2_name, u2_id = loadUserInfo(sp, 2)
+pl_list_id2, pl_list_name2 = buildLists(sp, u2_id)
+pl_two = getEntryPlaylist(2, u2_name, pl_list_id2, pl_list_name2)
+saveConfig()
 
 pl_tracks = []
 pl_track_IDs = []
 loadTracks(sp, pl_one, pl_tracks, pl_track_IDs)
-print(len(pl_tracks))
+logging.debug(f"Length after first playlist: {len(pl_tracks)}")
 loadTracks(sp, pl_two, pl_tracks, pl_track_IDs)
-print(len(pl_tracks))
-print(len(pl_track_IDs))
+logging.debug(f"Length after second playlist: {len(pl_tracks)}")
+logging.debug(f"Length of playlist ids: {len(pl_track_IDs)}")
 
-while True:
-    new_pl_flag = input("Create new playlist? (Y/N): ")
-    if new_pl_flag.upper() == "Y" or new_pl_flag.upper() == "N":
-        break;
-    else:
-        print("Please enter valid choice.")
+new_pl_flag = getNewPlaylistFlag()
 
 if new_pl_flag.upper() == "Y":
     createPlaylist(sp, sp.me()['id'])
 else:
     while True:
-        try:
-            pl_out_name = input("Existing playlist name: ")
-            pl_out_id = getPlaylistID(pl_out_name, pl_list_name, pl_list_id)
-            if (pl_out_id != 0):
-                sp.playlist_replace_items(pl_out_id, (pl_track_IDs.pop(0), )) # Pop the first element to replace existing playlist
-                for group in chunker(pl_track_IDs, 100):
-                    sp.playlist_add_items(pl_out_id, group)
-                break
-            else:
-                print(f"\'{pl_out_name}\" is not a valid playlist for {sp.me()['name']}!")
-        except:
-            print("Invalid playlist name input!")
+        pl_out_name = input("Existing playlist name: ")
+        pl_out_id = getPlaylistID(pl_out_name, pl_list_name, pl_list_id)
+        if pl_out_id != 0:
+            sp.playlist_replace_items(pl_out_id, (pl_track_IDs.pop(0), )) # Pop the first element to replace existing playlist
+            for group in chunker(pl_track_IDs, 100):
+                sp.playlist_add_items(pl_out_id, group)
+            break
+        else:
+            print(f"\'{pl_out_name}\" is not a valid playlist for {sp.me()['name']}!")
 
 
 

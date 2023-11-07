@@ -1,10 +1,9 @@
 #TODO
 # Use new playlist after creating it
-# Rate limiting on playlist save
 # Allow more than two users?
-# Store last used playlist/user info to settings file
-#   Allow overriding this file on run
+# Allow overriding settings  file on run
 # Upload basic settings file
+# Catch removed songs from Spotify and build report for user
 # PKCE implementation?
 #
 
@@ -13,6 +12,7 @@ from spotipy.oauth2 import SpotifyOAuth
 import configparser
 import logging
 import sys
+import time
 
 config = configparser.ConfigParser()
 config.read("Settings.ini")
@@ -62,15 +62,18 @@ def saveConfig():
 
 def loadTracks(sp, pl_one, pl_tracks, pl_track_IDs):
     pl_result = sp.playlist_items(pl_one, fields='items.track, next', additional_types=['track'])
-    pl_tracks.extend(pl_result['items'])
+    #pl_tracks.extend(pl_result['items'])
     for item in pl_result['items']:
-        pl_track_IDs.append(item['track']['id'])
+        if item['track']['id'] != None:
+            pl_tracks.extend(item)
+            pl_track_IDs.append(item['track']['id'])
 
     while pl_result['next']:
         pl_result = sp.next(pl_result)
-        pl_tracks.extend(pl_result['items'])
         for item in pl_result['items']:
-            pl_track_IDs.append(item['track']['id'])
+            if item['track']['id'] != None:
+                pl_tracks.extend(item)
+                pl_track_IDs.append(item['track']['id'])
 
 def createPlaylist(sp, user):
     sp.user_playlist_create(user, "TestPlaylistPleaseIgnore", public=False, collaborative=False)
@@ -168,7 +171,14 @@ else:
         if pl_out_id != 0:
             sp.playlist_replace_items(pl_out_id, (pl_track_IDs.pop(0), )) # Pop the first element to replace existing playlist
             for group in chunker(pl_track_IDs, 100):
-                sp.playlist_add_items(pl_out_id, group)
+                while True:
+                    try:
+                        print(group)
+                        sp.playlist_add_items(pl_out_id, group)
+                        break
+                    except Exception as e:
+                        logging.warning(f"Rate limit hit, sleeping for 5 seconds: {e}")
+                        time.sleep(5)
             break
         else:
             print(f"\'{pl_out_name}\" is not a valid playlist for {sp.me()['name']}!")

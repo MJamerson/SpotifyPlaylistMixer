@@ -5,7 +5,7 @@
 # Upload basic settings file
 # Catch removed songs from Spotify and build report for user
 # PKCE implementation?
-#
+# Set combination method (Pure random, 1x alternation, group alternation
 
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
@@ -16,7 +16,7 @@ import time
 
 config = configparser.ConfigParser()
 config.read("Settings.ini")
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.INFO)
 
 sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=config['CREDENTIALS']['CLIENT_ID'],
                                                client_secret=config['CREDENTIALS']['CLIENT_SECRET'],
@@ -25,7 +25,10 @@ sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=config['CREDENTIALS']['
 
 def getEntryPlaylist(entry, u_name, pl_list_id, pl_list_name):
     user_section = f"USER{entry}"
-    if config[user_section]['pl_id'] in pl_list_id:
+# Implementation doesn't work if not on profile? Public non-profile playlist doesn't get found
+#    if config[user_section]['pl_id'] in pl_list_id:
+#        return config[user_section]['pl_id']
+    if config[user_section]['pl_id'] != "":
         return config[user_section]['pl_id']
 
     while True:
@@ -64,19 +67,26 @@ def loadTracks(sp, pl_one, pl_tracks, pl_track_IDs):
     pl_result = sp.playlist_items(pl_one, fields='items.track, next', additional_types=['track'])
     #pl_tracks.extend(pl_result['items'])
     for item in pl_result['items']:
-        if item['track']['id'] != None:
+        if item['track']['id'] is not None:
             pl_tracks.extend(item)
             pl_track_IDs.append(item['track']['id'])
 
     while pl_result['next']:
         pl_result = sp.next(pl_result)
         for item in pl_result['items']:
-            if item['track']['id'] != None:
+            if item['track']['id'] is not None:
                 pl_tracks.extend(item)
                 pl_track_IDs.append(item['track']['id'])
 
 def createPlaylist(sp, user):
-    sp.user_playlist_create(user, "TestPlaylistPleaseIgnore", public=False, collaborative=False)
+    pl_name = ""
+    while pl_name == "":
+        pl_name = input("Please enter playlist name: ")
+
+    pl_new = sp.user_playlist_create(user, pl_name, public=False)
+    config['PLAYLIST']['name'] = pl_name
+    config['PLAYLIST']['id'] = pl_new['id']
+    return pl_new['id']
 
 def chunker(seq, size): #https://stackoverflow.com/questions/434287/how-to-iterate-over-a-list-in-chunks
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
@@ -138,7 +148,31 @@ def getNewPlaylistFlag():
         else:
             print("Please enter valid choice.")
 
+def getExistingPlaylist(pl_list_name, pl_list_id):
+    while True:
+        pl_out_name = input("Existing playlist name: ")
+        pl_out_id = getPlaylistID(pl_out_name, pl_list_name, pl_list_id)
+        if pl_out_id != 0:
+            return pl_out_id
+        else:
+            print(f"\'{pl_out_name}\" is not a valid playlist for {sp.me()['name']}!")
 
+def buildOutputPlaylist(sp, pl_out_id, pl_track_IDs):
+    sp.playlist_replace_items(pl_out_id, (pl_track_IDs.pop(0),))  # Pop the first element to replace existing playlist
+    for group in chunker(pl_track_IDs, 100):
+        while True: # Looping here allows for reattempting if ratelimiting is hit
+            try:
+                sp.playlist_add_items(pl_out_id, group)
+                break
+            except Exception as e:
+                logging.warning(f"Rate limit hit, sleeping for 5 seconds: {e}")
+                time.sleep(5)
+
+def loadOutputPlaylist():
+    if config['PLAYLIST']['id'] != "":
+        return config['PLAYLIST']['id']
+    else:
+        return None
 
 # Load OAuth user information and save to file
 u1_name, u1_id = loadAuthUserInfo(sp)
@@ -152,36 +186,24 @@ pl_list_id2, pl_list_name2 = buildLists(sp, u2_id)
 pl_two = getEntryPlaylist(2, u2_name, pl_list_id2, pl_list_name2)
 saveConfig()
 
+logging.info("Loading playlist tracks... (This may take a minute)")
 pl_tracks = []
 pl_track_IDs = []
 loadTracks(sp, pl_one, pl_tracks, pl_track_IDs)
-logging.debug(f"Length after first playlist: {len(pl_tracks)}")
+logging.info(f"Length after first playlist: {len(pl_tracks)}")
 loadTracks(sp, pl_two, pl_tracks, pl_track_IDs)
-logging.debug(f"Length after second playlist: {len(pl_tracks)}")
-logging.debug(f"Length of playlist ids: {len(pl_track_IDs)}")
+logging.info(f"Length after second playlist: {len(pl_tracks)}")
+logging.info(f"Length of playlist ids: {len(pl_track_IDs)}")
 
-new_pl_flag = getNewPlaylistFlag()
+pl_out_id = loadOutputPlaylist()
+if pl_out_id is None:
+    new_pl_flag = getNewPlaylistFlag()
+    if new_pl_flag.upper() == "Y":
+        pl_out_id = createPlaylist(sp, sp.me()['id'])
+        saveConfig()
+    else:
+        pl_out_id = getExistingPlaylist(pl_list_name, pl_list_id)
 
-if new_pl_flag.upper() == "Y":
-    createPlaylist(sp, sp.me()['id'])
-else:
-    while True:
-        pl_out_name = input("Existing playlist name: ")
-        pl_out_id = getPlaylistID(pl_out_name, pl_list_name, pl_list_id)
-        if pl_out_id != 0:
-            sp.playlist_replace_items(pl_out_id, (pl_track_IDs.pop(0), )) # Pop the first element to replace existing playlist
-            for group in chunker(pl_track_IDs, 100):
-                while True:
-                    try:
-                        print(group)
-                        sp.playlist_add_items(pl_out_id, group)
-                        break
-                    except Exception as e:
-                        logging.warning(f"Rate limit hit, sleeping for 5 seconds: {e}")
-                        time.sleep(5)
-            break
-        else:
-            print(f"\'{pl_out_name}\" is not a valid playlist for {sp.me()['name']}!")
-
+buildOutputPlaylist(sp, pl_out_id, pl_track_IDs)
 
 

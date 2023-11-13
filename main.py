@@ -1,5 +1,4 @@
 #TODO
-# Use new playlist after creating it
 # Allow more than two users?
 # Allow overriding settings  file on run
 # Upload basic settings file
@@ -13,6 +12,8 @@ import configparser
 import logging
 import sys
 import time
+import random
+from itertools import chain, zip_longest
 
 config = configparser.ConfigParser()
 config.read("Settings.ini")
@@ -174,7 +175,25 @@ def loadOutputPlaylist():
     else:
         return None
 
-# Load OAuth user information and save to file
+def getShuffleType():
+    while True:
+        valid_selections = ["1", "2"]
+        shuffle_type = input("Shuffle methods:\n1) True shuffle\n2) Alternating shuffle\nSelection:")
+        if shuffle_type in valid_selections:
+            return shuffle_type
+        else:
+            print("Please enter the number of your desired shuffle!")
+
+def shuffleTrue(pl_track_IDs):
+    random.shuffle(pl_track_IDs)
+    return pl_track_IDs
+
+def shuffleAlternate(pl_track_IDs): #https://stackoverflow.com/questions/48199961/how-to-interleave-two-lists-of-different-length
+    #TODO Separate out playlist tracks to individual lists for interlacing.
+    return [x for x in chain(*zip_longest(l1, l2)) if x is not None]
+
+
+#Load OAuth user information and save to file
 u1_name, u1_id = loadAuthUserInfo(sp)
 pl_list_id, pl_list_name = buildLists(sp, u1_id)
 pl_one = getEntryPlaylist(1, u1_name, pl_list_id, pl_list_name)
@@ -203,6 +222,13 @@ if pl_out_id is None:
         saveConfig()
     else:
         pl_out_id = getExistingPlaylist(pl_list_name, pl_list_id)
+
+shuffle_type = getShuffleType()
+if shuffle_type == 1:
+    pl_tracks_shuffled = shuffleTrue(pl_track_IDs)
+elif shuffle_type == 2:
+    pl_tracks_shuffled = shuffleAlternate(pl_track_IDs)
+
 
 buildOutputPlaylist(sp, pl_out_id, pl_track_IDs)
 

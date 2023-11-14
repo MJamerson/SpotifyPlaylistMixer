@@ -64,9 +64,11 @@ def saveConfig():
     with open("Settings.ini", "w") as configfile:
         config.write(configfile)
 
-def loadTracks(sp, pl_one, pl_tracks, pl_track_IDs):
-    pl_result = sp.playlist_items(pl_one, fields='items.track, next', additional_types=['track'])
-    #pl_tracks.extend(pl_result['items'])
+def loadTracks(sp, pl_id_entry, pl_tracks_list, pl_track_IDs_lists):
+    pl_result = sp.playlist_items(pl_id_entry, fields='items.track, next', additional_types=['track'])
+    pl_tracks = []
+    pl_track_IDs = []
+
     for item in pl_result['items']:
         if item['track']['id'] is not None:
             pl_tracks.extend(item)
@@ -78,6 +80,9 @@ def loadTracks(sp, pl_one, pl_tracks, pl_track_IDs):
             if item['track']['id'] is not None:
                 pl_tracks.extend(item)
                 pl_track_IDs.append(item['track']['id'])
+
+    pl_tracks_list.append(pl_tracks)
+    pl_track_IDs_lists.append(pl_track_IDs)
 
 def createPlaylist(sp, user):
     pl_name = ""
@@ -180,17 +185,20 @@ def getShuffleType():
         valid_selections = ["1", "2"]
         shuffle_type = input("Shuffle methods:\n1) True shuffle\n2) Alternating shuffle\nSelection:")
         if shuffle_type in valid_selections:
-            return shuffle_type
+            return int(shuffle_type)
         else:
             print("Please enter the number of your desired shuffle!")
 
-def shuffleTrue(pl_track_IDs):
-    random.shuffle(pl_track_IDs)
-    return pl_track_IDs
+def shuffleTrue(pl_track_IDs_lists):
+    playlist_combined = []
+    for playlist in pl_track_IDs_lists:
+        random.shuffle(playlist)
+        playlist_combined.extend(playlist)
+    random.shuffle(playlist_combined)
+    return playlist_combined
 
-def shuffleAlternate(pl_track_IDs): #https://stackoverflow.com/questions/48199961/how-to-interleave-two-lists-of-different-length
-    #TODO Separate out playlist tracks to individual lists for interlacing.
-    return [x for x in chain(*zip_longest(l1, l2)) if x is not None]
+def shuffleAlternate(pl_track_IDs_lists): #https://stackoverflow.com/questions/48199961/how-to-interleave-two-lists-of-different-length
+    return [x for x in chain(*zip_longest(*pl_track_IDs_lists)) if x is not None]
 
 
 #Load OAuth user information and save to file
@@ -206,13 +214,12 @@ pl_two = getEntryPlaylist(2, u2_name, pl_list_id2, pl_list_name2)
 saveConfig()
 
 logging.info("Loading playlist tracks... (This may take a minute)")
-pl_tracks = []
-pl_track_IDs = []
-loadTracks(sp, pl_one, pl_tracks, pl_track_IDs)
-logging.info(f"Length after first playlist: {len(pl_tracks)}")
-loadTracks(sp, pl_two, pl_tracks, pl_track_IDs)
-logging.info(f"Length after second playlist: {len(pl_tracks)}")
-logging.info(f"Length of playlist ids: {len(pl_track_IDs)}")
+pl_tracks_list = []
+pl_track_IDs_lists = []
+loadTracks(sp, pl_one, pl_tracks_list, pl_track_IDs_lists)
+print(f"Length of first playlist: {len(pl_track_IDs_lists[0])}")
+loadTracks(sp, pl_two, pl_tracks_list, pl_track_IDs_lists)
+print(f"Length of second playlist: {len(pl_track_IDs_lists[1])}")
 
 pl_out_id = loadOutputPlaylist()
 if pl_out_id is None:
@@ -225,11 +232,12 @@ if pl_out_id is None:
 
 shuffle_type = getShuffleType()
 if shuffle_type == 1:
-    pl_tracks_shuffled = shuffleTrue(pl_track_IDs)
+    pl_tracks_shuffled = shuffleTrue(pl_track_IDs_lists)
 elif shuffle_type == 2:
-    pl_tracks_shuffled = shuffleAlternate(pl_track_IDs)
+    pl_tracks_shuffled = shuffleAlternate(pl_track_IDs_lists)
 
 
-buildOutputPlaylist(sp, pl_out_id, pl_track_IDs)
+
+buildOutputPlaylist(sp, pl_out_id, pl_tracks_shuffled)
 
 

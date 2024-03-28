@@ -5,6 +5,7 @@
 # Catch removed songs from Spotify and build report for user
 # PKCE implementation?
 # Set combination method (Pure random, 1x alternation, group alternation
+# Fix infinite loop on user name change
 
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
@@ -106,7 +107,7 @@ def loadUserInfo(sp, id_num):
 
     try:
         t_acc = sp.user(u_user)
-        if t_acc['display_name'] == u_name and t_acc['id'] == u_id:
+        if t_acc['display_name'] == u_name and t_acc['id'] == u_id: # If the user changes their display_name, this loop is infinite
             return t_acc['display_name'], t_acc['id']
         else:
             raise Exception
@@ -126,6 +127,8 @@ def loadUserInfo(sp, id_num):
                     break
                 except:
                     print("Error accessing name or id of user object!")
+            else:
+                print(f"Loaded {u_name} - {u_id}")
 
         # Store user values to config memory for saving later
     config[id_num]['user'] = u_user
@@ -181,8 +184,10 @@ def loadOutputPlaylist():
         return None
 
 def getShuffleType():
+    valid_selections = ["1", "2"]
+    if config['PLAYLIST']['shuffleID'] in valid_selections:
+        return int(config['PLAYLIST']['shuffleID'])
     while True:
-        valid_selections = ["1", "2"]
         shuffle_type = input("Shuffle methods:\n1) True shuffle\n2) Alternating shuffle\nSelection:")
         if shuffle_type in valid_selections:
             return int(shuffle_type)
@@ -200,6 +205,9 @@ def shuffleTrue(pl_track_IDs_lists):
 def shuffleAlternate(pl_track_IDs_lists): #https://stackoverflow.com/questions/48199961/how-to-interleave-two-lists-of-different-length
     return [x for x in chain(*zip_longest(*pl_track_IDs_lists)) if x is not None]
 
+def preShufflePlaylists(pl_track_IDs_lists):
+    for playlist in pl_track_IDs_lists:
+        random.shuffle(playlist)
 
 #Load OAuth user information and save to file
 u1_name, u1_id = loadAuthUserInfo(sp)
@@ -234,6 +242,7 @@ shuffle_type = getShuffleType()
 if shuffle_type == 1:
     pl_tracks_shuffled = shuffleTrue(pl_track_IDs_lists)
 elif shuffle_type == 2:
+    preShufflePlaylists(pl_track_IDs_lists)
     pl_tracks_shuffled = shuffleAlternate(pl_track_IDs_lists)
 
 

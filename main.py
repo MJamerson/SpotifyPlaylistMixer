@@ -162,6 +162,8 @@ def getExistingPlaylist(pl_list_name, pl_list_id):
         pl_out_name = input("Existing playlist name: ")
         pl_out_id = getPlaylistID(pl_out_name, pl_list_name, pl_list_id)
         if pl_out_id != 0:
+            config['PLAYLIST']['name'] = pl_out_name
+            config['PLAYLIST']['id'] = pl_out_id
             return pl_out_id
         else:
             print(f"\'{pl_out_name}\" is not a valid playlist for {sp.me()['name']}!")
@@ -237,6 +239,7 @@ if pl_out_id is None:
         saveConfig()
     else:
         pl_out_id = getExistingPlaylist(pl_list_name, pl_list_id)
+        saveConfig()
 
 shuffle_type = getShuffleType()
 if shuffle_type == 1:
